@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import SockJS from 'sockjs-client';
-import { Client } from '@stomp/stompjs';
 
 const ChatRoomsList = ({ token, onSelectRoom }) => {
   const [chatRooms, setChatRooms] = useState([]);
 
   useEffect(() => {
-    // 초기 채팅방 목록 조회
+    // 채팅방 목록 조회 API 호출
     fetch('http://localhost:8080/chat/users/rooms', {
       method: 'GET',
       headers: {
@@ -14,9 +12,18 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
         Authorization: `Bearer ${token}`,
       },
     })
-      .then((response) => response.json())
-      .then((data) => setChatRooms(data))
-      .catch((error) => console.error('Error fetching chat rooms:', error));
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Failed to fetch chat rooms');
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setChatRooms(data);
+      })
+      .catch((error) => {
+        console.error('Error fetching chat rooms:', error);
+      });
   }, [token]);
 
   return (
