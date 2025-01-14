@@ -7,7 +7,7 @@ function App() {
   const [receivedMessages, setReceivedMessages] = useState([]);
 
   // JWT 토큰 (테스트용)
-  const token = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJob25nIiwidXNlcklkIjo0LCJpYXQiOjE3MzY4Mzc1MzQsImV4cCI6MTczNjg0MTEzNH0.90a2erZUkfh6hPV3_jU_IETpEPROuC5uLuXdKaSXd2gMXQ3rfhB3PfUWq_DccBAt-fIDHp2vhv1-Ds7OpHJCmw';
+  const token = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJob25nIiwidXNlcklkIjo0LCJpYXQiOjE3MzY4NDA3NjUsImV4cCI6MTczNjg0NDM2NX0.a4ynTvZ471T1sk7-WHUDNv2kdNGu_dTtJaKiBSUZ8YsHV-v18xSqDCBbDglZARonjvLkn34eshibCeXdwOjdxQ';
 
   return (
     <div>

@@ -2,12 +2,11 @@ import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 
-const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
+const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages, currentUserId }) => {
   const [message, setMessage] = useState("");
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
-  const currentUserId = 1; // Replace with actual logged-in user's ID
 
   useEffect(() => {
     if (!roomId) return;
@@ -52,6 +51,7 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
     };
   }, [roomId]);
 
+
   useEffect(() => {
     // 스크롤을 최신 메시지로 이동
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -70,8 +70,8 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
 
     const messageDto = {
       id: Date.now(), // 클라이언트에서 고유 ID 생성 (임시)
-      senderId: currentUserId, // Replace with actual sender ID
-      senderName: "User 1", // Replace with actual sender name
+      senderId: currentUserId, // 동적으로 받은 로그인 사용자 ID
+      senderName: `User ${currentUserId}`, // 사용자 ID에 기반한 이름
       content: message,
       chatRoomId: roomId,
       sendAt: new Date().toISOString(), // 전송 시각 추가
