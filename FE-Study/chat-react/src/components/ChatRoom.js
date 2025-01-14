@@ -7,6 +7,7 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
+  const currentUserId = 1; // Replace with actual logged-in user's ID
 
   useEffect(() => {
     if (!roomId) return;
@@ -69,7 +70,8 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
 
     const messageDto = {
       id: Date.now(), // 클라이언트에서 고유 ID 생성 (임시)
-      senderId: 1, // Replace with actual sender ID
+      senderId: currentUserId, // Replace with actual sender ID
+      senderName: "User 1", // Replace with actual sender name
       content: message,
       chatRoomId: roomId,
       sendAt: new Date().toISOString(), // 전송 시각 추가
@@ -122,18 +124,47 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
   return (
     <div>
       <h2>Chat Room {roomId}</h2>
-      <ul style={{ maxHeight: "300px", overflowY: "auto" }}>
+      <ul style={{ maxHeight: "300px", overflowY: "auto", padding: "0", margin: "0", listStyle: "none" }}>
         {receivedMessages.map((msg, idx) => (
-          <li key={idx}>{msg.content}</li>
+          <li
+            key={idx}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: msg.senderId === currentUserId ? "flex-end" : "flex-start",
+              margin: "5px 0",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: msg.senderId === currentUserId ? "#d1f7d6" : "#f1f1f1",
+                padding: "8px 12px",
+                borderRadius: "12px",
+                maxWidth: "70%",
+                wordWrap: "break-word",
+              }}
+            >
+              <strong style={{ fontSize: "0.9em" }}>{msg.senderName}</strong>
+              <p style={{ margin: "5px 0 0", fontSize: "1em" }}>{msg.content}</p>
+            </div>
+          </li>
         ))}
         <div ref={messagesEndRef} />
       </ul>
-      <input
-        type="text"
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-      />
-      <button onClick={sendMessage}>Send Message</button>
+      <div style={{ display: "flex", marginTop: "10px" }}>
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
+        />
+        <button
+          onClick={sendMessage}
+          style={{ padding: "10px 20px", borderRadius: "5px", marginLeft: "10px", backgroundColor: "#007BFF", color: "white", border: "none" }}
+        >
+          Send
+        </button>
+      </div>
     </div>
   );
 };
