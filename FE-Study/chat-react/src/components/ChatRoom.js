@@ -2,168 +2,156 @@ import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 
-const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages, currentUserId }) => {
+const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
   const [message, setMessage] = useState("");
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || !token) {
+      console.error("Missing roomId or token for WebSocket connection.");
+      return;
+    }
 
-    // WebSocket 연결 설정
-    const socket = new SockJS("http://localhost:8080/ws/chat");
-    const client = new Client({
-      webSocketFactory: () => socket,
-      connectHeaders: {
-        Authorization: `Bearer ${token}`,
-      },
-      onConnect: () => {
-        console.log("Connected to WebSocket server");
-        setIsConnected(true);
+    let client;
 
-        // WebSocket 메시지 구독
-        client.subscribe(`/topic/${roomId}`, (messageOutput) => {
-          const parsedMessage = JSON.parse(messageOutput.body);
+    const connectWebSocket = () => {
+      console.log("Connecting to WebSocket with token:", token);
 
-          // 실시간 메시지를 목록 아래에 추가
-          setReceivedMessages((prevMessages) => [...prevMessages, parsedMessage]);
-        });
-      },
-      onStompError: (error) => {
-        console.error("STOMP error:", error);
-      },
-      onWebSocketClose: () => {
-        console.warn("WebSocket connection closed");
-        setIsConnected(false);
-      },
-      debug: (str) => console.log(str),
-    });
+      const socket = new SockJS("http://localhost:8080/ws/chat");
+      client = new Client({
+        webSocketFactory: () => socket,
+        connectHeaders: {
+          Authorization: `Bearer ${token}`,
+        },
+        onConnect: () => {
+          console.log("WebSocket connected.");
+          setIsConnected(true);
 
-    client.activate();
-    setStompClient(client);
+          client.subscribe(`/topic/${roomId}`, (messageOutput) => {
+            const parsedMessage = JSON.parse(messageOutput.body);
 
-    // Cleanup WebSocket on component unmount or roomId change
+            // 중복 메시지 방지 (ID로 확인)
+            setReceivedMessages((prevMessages) => {
+              if (!prevMessages.some((msg) => msg.id === parsedMessage.id)) {
+                return [...prevMessages, parsedMessage];
+              }
+              return prevMessages;
+            });
+          });
+        },
+        onStompError: (error) => {
+          console.error("STOMP error:", error);
+        },
+        onWebSocketClose: () => {
+          console.warn("WebSocket connection closed.");
+          setIsConnected(false);
+        },
+      });
+
+      client.activate();
+      setStompClient(client);
+    };
+
+    connectWebSocket();
+
     return () => {
       if (client && client.active) {
+        console.log("Deactivating WebSocket client.");
         client.deactivate();
       }
     };
-  }, [roomId]);
-
+  }, [roomId, token]);
 
   useEffect(() => {
-    // 스크롤을 최신 메시지로 이동
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [receivedMessages]);
 
   const sendMessage = () => {
     if (!stompClient || !isConnected) {
-      console.error("WebSocket is not connected.");
+      alert("WebSocket is not connected.");
       return;
     }
 
-    if (message.trim() === "") {
-      console.error("Message is empty.");
+    if (!message.trim()) {
+      alert("Message is empty.");
       return;
     }
 
     const messageDto = {
-      id: Date.now(), // 클라이언트에서 고유 ID 생성 (임시)
-      senderId: currentUserId, // 동적으로 받은 로그인 사용자 ID
-      senderName: `User ${currentUserId}`, // 사용자 ID에 기반한 이름
+      id: Date.now(),
       content: message,
       chatRoomId: roomId,
-      sendAt: new Date().toISOString(), // 전송 시각 추가
+      sendAt: new Date().toISOString(),
     };
 
-    try {
-      // WebSocket을 통해 메시지 전송
-      stompClient.publish({
-        destination: `/app/chat/${roomId}`,
-        body: JSON.stringify(messageDto),
-      });
+    console.log("Sending message:", messageDto);
 
-      // 실시간 메시지를 목록에 바로 추가
-      setReceivedMessages((prevMessages) => [...prevMessages, messageDto]);
+    stompClient.publish({
+      destination: `/app/chat/${roomId}`,
+      body: JSON.stringify(messageDto),
+      headers: {
+        Authorization: `Bearer ${token}`, // 토큰 추가
+      },
+    });
 
-      // 입력 필드 초기화
-      setMessage("");
-    } catch (error) {
-      console.error("Error sending message:", error);
-    }
+    setReceivedMessages((prevMessages) => [...prevMessages, messageDto]);
+    setMessage("");
   };
 
   const fetchMessages = async () => {
+    if (!roomId) {
+      console.error("Missing roomId for fetching messages.");
+      return;
+    }
+
     try {
-      const response = await fetch(
-        `http://localhost:8080/chat/rooms/${roomId}/messages`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`http://localhost:8080/chat/rooms/${roomId}/messages`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch messages: ${response.status}`);
+      }
       const data = await response.json();
 
-      // 이전 메시지 목록을 상태에 추가 (위에 배치)
-      setReceivedMessages((prevMessages) => [...data, ...prevMessages]);
+      // 중복 방지 (ID로 확인)
+      setReceivedMessages((prevMessages) => {
+        const uniqueMessages = data.filter(
+          (newMessage) => !prevMessages.some((msg) => msg.id === newMessage.id)
+        );
+        return [...prevMessages, ...uniqueMessages];
+      });
     } catch (error) {
       console.error("Error fetching messages:", error);
     }
   };
 
-  // 초기 메시지 로드
   useEffect(() => {
-    if (roomId) {
-      fetchMessages();
-    }
+    fetchMessages();
   }, [roomId]);
 
   return (
     <div>
       <h2>Chat Room {roomId}</h2>
-      <ul style={{ maxHeight: "300px", overflowY: "auto", padding: "0", margin: "0", listStyle: "none" }}>
+      <ul style={{ maxHeight: "300px", overflowY: "auto" }}>
         {receivedMessages.map((msg, idx) => (
-          <li
-            key={idx}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: msg.senderId === currentUserId ? "flex-end" : "flex-start",
-              margin: "5px 0",
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: msg.senderId === currentUserId ? "#d1f7d6" : "#f1f1f1",
-                padding: "8px 12px",
-                borderRadius: "12px",
-                maxWidth: "70%",
-                wordWrap: "break-word",
-              }}
-            >
-              <strong style={{ fontSize: "0.9em" }}>{msg.senderName}</strong>
-              <p style={{ margin: "5px 0 0", fontSize: "1em" }}>{msg.content}</p>
-            </div>
+          <li key={idx}>
+            <strong>{msg.senderName}</strong>: {msg.content}
           </li>
         ))}
         <div ref={messagesEndRef} />
       </ul>
-      <div style={{ display: "flex", marginTop: "10px" }}>
+      <div>
         <input
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          style={{ flex: 1, padding: "10px", borderRadius: "5px", border: "1px solid #ccc" }}
         />
-        <button
-          onClick={sendMessage}
-          style={{ padding: "10px 20px", borderRadius: "5px", marginLeft: "10px", backgroundColor: "#007BFF", color: "white", border: "none" }}
-        >
-          Send
-        </button>
+        <button onClick={sendMessage}>Send</button>
       </div>
     </div>
   );

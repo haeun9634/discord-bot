@@ -1,20 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 
 const ChatRoomsList = ({ token, onSelectRoom }) => {
   const [chatRooms, setChatRooms] = useState([]);
 
   useEffect(() => {
-    // 채팅방 목록 조회 API 호출
-    fetch('http://localhost:8080/chat/users/rooms', {
-      method: 'GET',
+    fetch("http://localhost:8080/chat/users/rooms", {
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
     })
       .then((response) => {
         if (!response.ok) {
-          throw new Error('Failed to fetch chat rooms');
+          throw new Error("Failed to fetch chat rooms");
         }
         return response.json();
       })
@@ -22,7 +21,7 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
         setChatRooms(data);
       })
       .catch((error) => {
-        console.error('Error fetching chat rooms:', error);
+        console.error("Error fetching chat rooms:", error);
       });
   }, [token]);
 
@@ -31,7 +30,11 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
       <h2>Your Chat Rooms</h2>
       <ul>
         {chatRooms.map((room) => (
-          <li key={room.id} onClick={() => onSelectRoom(room.id)}>
+          <li
+            key={room.id}
+            onClick={() => onSelectRoom(room.id)}
+            style={{ cursor: "pointer", margin: "5px 0" }}
+          >
             Chat Room: {room.name}
           </li>
         ))}

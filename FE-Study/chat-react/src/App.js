@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
-import ChatRoom from './components/ChatRoom';
-import ChatRoomsList from './components/ChatRoomsList';
+import React, { useState } from "react";
+import ChatRoom from "./components/ChatRoom";
+import ChatRoomsList from "./components/ChatRoomsList";
+import Login from "./components/Login";
 
 function App() {
+  const [token, setToken] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [receivedMessages, setReceivedMessages] = useState([]);
 
-  // JWT 토큰 (테스트용)
-  const token = 'eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJob25nIiwidXNlcklkIjo0LCJpYXQiOjE3MzY4NDA3NjUsImV4cCI6MTczNjg0NDM2NX0.a4ynTvZ471T1sk7-WHUDNv2kdNGu_dTtJaKiBSUZ8YsHV-v18xSqDCBbDglZARonjvLkn34eshibCeXdwOjdxQ';
+  if (!token) {
+    return (
+      <Login
+        onLogin={(userToken, userId) => {
+          setToken(userToken);
+          setCurrentUserId(userId);
+        }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -19,6 +30,7 @@ function App() {
           <ChatRoom
             token={token}
             roomId={selectedRoomId}
+            currentUserId={currentUserId}
             receivedMessages={receivedMessages}
             setReceivedMessages={setReceivedMessages}
           />
