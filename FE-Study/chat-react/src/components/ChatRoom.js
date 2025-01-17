@@ -2,11 +2,16 @@ import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 
-const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
+const ChatRoom = ({ token, roomId, userId, username, receivedMessages, setReceivedMessages }) => {
   const [message, setMessage] = useState("");
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Debug: Props 확인
+  useEffect(() => {
+    console.log("ChatRoom Props:", { token, roomId, userId, username });
+  }, [token, roomId, userId, username]);
 
   useEffect(() => {
     if (!roomId || !token) {
@@ -25,14 +30,27 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
         connectHeaders: {
           Authorization: `Bearer ${token}`,
         },
+        reconnectDelay: 5000,
         onConnect: () => {
           console.log("WebSocket connected.");
           setIsConnected(true);
 
           client.subscribe(`/topic/${roomId}`, (messageOutput) => {
             const parsedMessage = JSON.parse(messageOutput.body);
+            console.log("Received message from broker:", parsedMessage);
 
-            // 중복 메시지 방지 (ID로 확인)
+            // Debug: Sender and User ID 비교
+            console.log(
+              "Debug: Comparing senderId and userId",
+              `senderId: ${parsedMessage.sender}, userId: ${userId}`,
+              `Type: senderId(${typeof parsedMessage.sender}), userId(${typeof userId})`
+            );
+
+            // ID가 없을 경우 고유한 ID 생성
+            if (!parsedMessage.id) {
+              parsedMessage.id = `${parsedMessage.roomId}-${Date.now()}`;
+            }
+
             setReceivedMessages((prevMessages) => {
               if (!prevMessages.some((msg) => msg.id === parsedMessage.id)) {
                 return [...prevMessages, parsedMessage];
@@ -80,9 +98,11 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
     }
 
     const messageDto = {
-      id: Date.now(),
+      id: `${roomId}-${Date.now()}`,
       content: message,
       chatRoomId: roomId,
+      senderId: userId,
+      senderName: username,
       sendAt: new Date().toISOString(),
     };
 
@@ -92,7 +112,7 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
       destination: `/app/chat/${roomId}`,
       body: JSON.stringify(messageDto),
       headers: {
-        Authorization: `Bearer ${token}`, // 토큰 추가
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -118,7 +138,6 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
       }
       const data = await response.json();
 
-      // 중복 방지 (ID로 확인)
       setReceivedMessages((prevMessages) => {
         const uniqueMessages = data.filter(
           (newMessage) => !prevMessages.some((msg) => msg.id === newMessage.id)
@@ -137,10 +156,28 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
   return (
     <div>
       <h2>Chat Room {roomId}</h2>
-      <ul style={{ maxHeight: "300px", overflowY: "auto" }}>
+      <ul style={{ maxHeight: "300px", overflowY: "auto", padding: 0, listStyle: "none" }}>
         {receivedMessages.map((msg, idx) => (
-          <li key={idx}>
-            <strong>{msg.senderName}</strong>: {msg.content}
+          <li
+            key={idx}
+            style={{
+              display: "flex",
+              justifyContent: String(msg.sender) === String(userId) ? "flex-end" : "flex-start",
+              margin: "10px 0",
+            }}
+          >
+            <div
+              style={{
+                maxWidth: "60%",
+                padding: "10px",
+                borderRadius: "10px",
+                backgroundColor: String(msg.sender) === String(userId) ? "#daf8cb" : "#f1f0f0",
+                textAlign: "left",
+              }}
+            >
+              <strong style={{ fontSize: "0.9em", color: "#555" }}>{msg.senderName}</strong>
+              <div style={{ marginTop: "5px" }}>{msg.content}</div>
+            </div>
           </li>
         ))}
         <div ref={messagesEndRef} />
@@ -150,8 +187,11 @@ const ChatRoom = ({ token, roomId, receivedMessages, setReceivedMessages }) => {
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          style={{ width: "80%", padding: "10px", marginRight: "5px", borderRadius: "5px" }}
         />
-        <button onClick={sendMessage}>Send</button>
+        <button onClick={sendMessage} style={{ padding: "10px", borderRadius: "5px" }}>
+          Send
+        </button>
       </div>
     </div>
   );

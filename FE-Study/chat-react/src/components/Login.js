@@ -4,8 +4,12 @@ const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
+    setIsLoading(true);
+    setError("");
+
     try {
       const response = await fetch("http://localhost:8080/api/auth/login", {
         method: "POST",
@@ -16,13 +20,22 @@ const Login = ({ onLogin }) => {
       });
 
       if (!response.ok) {
-        throw new Error("Login failed");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Login failed");
       }
 
       const data = await response.json();
-      onLogin(data.token, data.userId); // 토큰과 사용자 ID 전달
+      console.log("Login successful:", data);
+
+      // 부모 컴포넌트로 데이터 전달
+      onLogin(data.token, data.id, data.name);
+
+      setUsername("");
+      setPassword("");
     } catch (err) {
-      setError("Invalid username or password");
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -42,7 +55,9 @@ const Login = ({ onLogin }) => {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      <button onClick={handleLogin}>Login</button>
+      <button onClick={handleLogin} disabled={isLoading}>
+        {isLoading ? "Logging in..." : "Login"}
+      </button>
     </div>
   );
 };
