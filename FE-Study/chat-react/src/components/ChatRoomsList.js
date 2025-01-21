@@ -38,18 +38,23 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
 
         client.subscribe("/topic/chatrooms", (message) => {
           const updatedRoom = JSON.parse(message.body);
+
+          // 채팅방 목록 업데이트 및 정렬
           setChatRooms((prevRooms) => {
             const existingRoomIndex = prevRooms.findIndex(
               (room) => room.chatRoom.id === updatedRoom.chatRoom.id
             );
+
             let updatedRooms = [...prevRooms];
+
             if (existingRoomIndex > -1) {
-              // Update existing room
-              updatedRooms[existingRoomIndex] = updatedRoom;
-            } else {
-              // Add new room
-              updatedRooms.unshift(updatedRoom);
+              // 기존 채팅방 업데이트 및 맨 앞으로 이동
+              updatedRooms.splice(existingRoomIndex, 1); // 기존 항목 제거
             }
+
+            // 맨 앞에 추가
+            updatedRooms.unshift(updatedRoom);
+
             return updatedRooms;
           });
         });
@@ -111,4 +116,3 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
 };
 
 export default ChatRoomsList;
-

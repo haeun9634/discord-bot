@@ -2,16 +2,12 @@ import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 
-const ChatRoom = ({ token, roomId, userId, username, receivedMessages, setReceivedMessages }) => {
+const ChatRoom = ({ token, roomId, userId, username }) => {
   const [message, setMessage] = useState("");
+  const [receivedMessages, setReceivedMessages] = useState([]);
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
-
-  // Debug: Props 확인
-  useEffect(() => {
-    console.log("ChatRoom Props:", { token, roomId, userId, username });
-  }, [token, roomId, userId, username]);
 
   useEffect(() => {
     if (!roomId || !token) {
@@ -37,25 +33,21 @@ const ChatRoom = ({ token, roomId, userId, username, receivedMessages, setReceiv
 
           client.subscribe(`/topic/${roomId}`, (messageOutput) => {
             const parsedMessage = JSON.parse(messageOutput.body);
-            console.log("Received message from broker:", parsedMessage);
 
-            // Debug: Sender and User ID 비교
-            console.log(
-              "Debug: Comparing senderId and userId",
-              `senderId: ${parsedMessage.sender}, userId: ${userId}`,
-              `Type: senderId(${typeof parsedMessage.sender}), userId(${typeof userId})`
-            );
-
-            // ID가 없을 경우 고유한 ID 생성
             if (!parsedMessage.id) {
               parsedMessage.id = `${parsedMessage.roomId}-${Date.now()}`;
             }
 
             setReceivedMessages((prevMessages) => {
-              if (!prevMessages.some((msg) => msg.id === parsedMessage.id)) {
-                return [...prevMessages, parsedMessage];
-              }
-              return prevMessages;
+              // 중복 제거 및 정렬
+              const updatedMessages = [...prevMessages, parsedMessage];
+              const uniqueMessages = updatedMessages.filter(
+                (message, index, self) =>
+                  index === self.findIndex((m) => m.id === message.id)
+              );
+              return uniqueMessages.sort(
+                (a, b) => new Date(a.sendAt) - new Date(b.sendAt)
+              );
             });
           });
         },
@@ -142,7 +134,9 @@ const ChatRoom = ({ token, roomId, userId, username, receivedMessages, setReceiv
         const uniqueMessages = data.filter(
           (newMessage) => !prevMessages.some((msg) => msg.id === newMessage.id)
         );
-        return [...prevMessages, ...uniqueMessages];
+        return [...prevMessages, ...uniqueMessages].sort(
+          (a, b) => new Date(a.sendAt) - new Date(b.sendAt)
+        );
       });
     } catch (error) {
       console.error("Error fetching messages:", error);
