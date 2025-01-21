@@ -18,7 +18,7 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
     let client;
 
     const connectWebSocket = () => {
-      console.log("Connecting to WebSocket with token:", token);
+      console.log("Connecting to WebSocket with token:", userId);
 
       const socket = new SockJS("http://localhost:8080/ws/chat");
       client = new Client({
@@ -33,19 +33,21 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
 
           client.subscribe(`/topic/${roomId}`, (messageOutput) => {
             const parsedMessage = JSON.parse(messageOutput.body);
+            console.log("Debug: senderId =", parsedMessage.sender, "userId =", userId);
+console.log("Typeof senderId =", typeof parsedMessage.sender, "Typeof userId =", typeof userId);
 
-            if (!parsedMessage.id) {
-              parsedMessage.id = `${parsedMessage.roomId}-${Date.now()}`;
-            }
+
+            // 내가 보낸 메시지인지 확인 (senderId가 userId와 같은 경우)
+            if (String(parsedMessage.sender) === String(userId)) {
+              console.log("Skipping broadcast for my message:", parsedMessage);
+              return; // 브로드캐스트된 내 메시지는 무시
+            }            
 
             setReceivedMessages((prevMessages) => {
-              // 중복 제거 및 정렬
-              const updatedMessages = [...prevMessages, parsedMessage];
-              const uniqueMessages = updatedMessages.filter(
-                (message, index, self) =>
-                  index === self.findIndex((m) => m.id === message.id)
-              );
-              return uniqueMessages.sort(
+              if (prevMessages.some((msg) => msg.id === parsedMessage.id)) {
+                return prevMessages; // 중복 방지
+              }
+              return [...prevMessages, parsedMessage].sort(
                 (a, b) => new Date(a.sendAt) - new Date(b.sendAt)
               );
             });
@@ -100,6 +102,15 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
 
     console.log("Sending message:", messageDto);
 
+    // 메시지를 로컬에서 먼저 추가
+    setReceivedMessages((prevMessages) => {
+      if (prevMessages.some((msg) => msg.id === messageDto.id)) {
+        return prevMessages; // 중복 방지
+      }
+      return [...prevMessages, messageDto];
+    });
+
+    // WebSocket 송신
     stompClient.publish({
       destination: `/app/chat/${roomId}`,
       body: JSON.stringify(messageDto),
@@ -108,16 +119,10 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
       },
     });
 
-    setReceivedMessages((prevMessages) => [...prevMessages, messageDto]);
     setMessage("");
   };
 
   const fetchMessages = async () => {
-    if (!roomId) {
-      console.error("Missing roomId for fetching messages.");
-      return;
-    }
-
     try {
       const response = await fetch(`http://localhost:8080/chat/rooms/${roomId}/messages`, {
         method: "GET",
@@ -151,12 +156,15 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
     <div>
       <h2>Chat Room {roomId}</h2>
       <ul style={{ maxHeight: "300px", overflowY: "auto", padding: 0, listStyle: "none" }}>
-        {receivedMessages.map((msg, idx) => (
+        {receivedMessages.map((msg) => (
           <li
-            key={idx}
+            key={msg.id}
             style={{
               display: "flex",
-              justifyContent: String(msg.sender) === String(userId) ? "flex-end" : "flex-start",
+              justifyContent:
+                String(msg.senderId) === String(userId) || msg.senderName === username
+                  ? "flex-end"
+                  : "flex-start",
               margin: "10px 0",
             }}
           >
@@ -165,7 +173,10 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
                 maxWidth: "60%",
                 padding: "10px",
                 borderRadius: "10px",
-                backgroundColor: String(msg.sender) === String(userId) ? "#daf8cb" : "#f1f0f0",
+                backgroundColor:
+                  String(msg.senderId) === String(userId) || msg.senderName === username
+                    ? "#daf8cb"
+                    : "#f1f0f0",
                 textAlign: "left",
               }}
             >
