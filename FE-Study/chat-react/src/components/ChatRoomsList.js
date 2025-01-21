@@ -6,7 +6,6 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
   const [chatRooms, setChatRooms] = useState([]);
 
   useEffect(() => {
-    // Fetch existing chat rooms
     const fetchChatRooms = async () => {
       try {
         const response = await fetch("http://localhost:8080/chat/users/rooms", {
@@ -20,12 +19,7 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
           throw new Error("Failed to fetch chat rooms");
         }
         const data = await response.json();
-
-        // Parse and set chat rooms
-        setChatRooms(data.map((room) => ({
-          ...room,
-          updatedAt: new Date(room.updatedAt),
-        })));
+        setChatRooms(data);
       } catch (error) {
         console.error("Error fetching chat rooms:", error);
       }
@@ -33,7 +27,6 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
 
     fetchChatRooms();
 
-    // Set up WebSocket connection
     const socket = new SockJS("http://localhost:8080/ws/chat");
     const client = new Client({
       webSocketFactory: () => socket,
@@ -41,31 +34,22 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
         Authorization: `Bearer ${token}`,
       },
       onConnect: () => {
-        console.log("Connected to WebSocket for chat rooms");
+        console.log("Connected to WebSocket");
 
         client.subscribe("/topic/chatrooms", (message) => {
           const updatedRoom = JSON.parse(message.body);
-
-          // Convert updatedAt to Date object
-          updatedRoom.updatedAt = new Date(updatedRoom.updatedAt);
-
-          console.log("Received updated chat room from broker:", updatedRoom);
-
           setChatRooms((prevRooms) => {
-            const existingRoomIndex = prevRooms.findIndex((room) => room.id === updatedRoom.id);
-            
-            let updatedRooms;
+            const existingRoomIndex = prevRooms.findIndex(
+              (room) => room.chatRoom.id === updatedRoom.chatRoom.id
+            );
+            let updatedRooms = [...prevRooms];
             if (existingRoomIndex > -1) {
-              // Update the existing room and move it to the top
-              updatedRooms = [...prevRooms];
-              updatedRooms.splice(existingRoomIndex, 1); // Remove existing room
+              // Update existing room
+              updatedRooms[existingRoomIndex] = updatedRoom;
             } else {
               // Add new room
-              updatedRooms = [...prevRooms];
+              updatedRooms.unshift(updatedRoom);
             }
-
-            updatedRooms.unshift(updatedRoom); // Add to the top
-
             return updatedRooms;
           });
         });
@@ -85,14 +69,40 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
   return (
     <div>
       <h2>Your Chat Rooms</h2>
-      <ul>
+      <ul style={{ listStyleType: "none", padding: 0 }}>
         {chatRooms.map((room) => (
           <li
-            key={room.id}
-            onClick={() => onSelectRoom(room.id)}
-            style={{ cursor: "pointer", margin: "5px 0" }}
+            key={room.chatRoom.id}
+            onClick={() => onSelectRoom(room.chatRoom.id)}
+            style={{
+              border: "1px solid #ccc",
+              borderRadius: "5px",
+              padding: "10px",
+              margin: "5px 0",
+              cursor: "pointer",
+              background: "#f9f9f9",
+            }}
           >
-            Chat Room: {room.name}
+            <h3>{room.chatRoom.name}</h3>
+            <p>Latest Message: {room.latestMessage || "No messages yet"}</p>
+            <div>
+              Participants:
+              {room.userProfiles.map((profile) => (
+                <span
+                  key={profile.id}
+                  style={{
+                    display: "inline-block",
+                    margin: "0 5px",
+                    padding: "5px",
+                    border: "1px solid #ddd",
+                    borderRadius: "50%",
+                    backgroundColor: "#eee",
+                  }}
+                >
+                  {profile.emoji}
+                </span>
+              ))}
+            </div>
           </li>
         ))}
       </ul>
@@ -101,3 +111,4 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
 };
 
 export default ChatRoomsList;
+
