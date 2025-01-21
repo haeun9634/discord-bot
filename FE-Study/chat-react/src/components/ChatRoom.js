@@ -33,12 +33,9 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
 
           client.subscribe(`/topic/${roomId}`, (messageOutput) => {
             const parsedMessage = JSON.parse(messageOutput.body);
-            console.log("Debug: senderId =", parsedMessage.sender, "userId =", userId);
-console.log("Typeof senderId =", typeof parsedMessage.sender, "Typeof userId =", typeof userId);
-
 
             // 내가 보낸 메시지인지 확인 (senderId가 userId와 같은 경우)
-            if (String(parsedMessage.sender) === String(userId)) {
+            if (String(parsedMessage.senderId) === String(userId)) {
               console.log("Skipping broadcast for my message:", parsedMessage);
               return; // 브로드캐스트된 내 메시지는 무시
             }            
@@ -162,9 +159,7 @@ console.log("Typeof senderId =", typeof parsedMessage.sender, "Typeof userId =",
             style={{
               display: "flex",
               justifyContent:
-                String(msg.senderId) === String(userId) || msg.senderName === username
-                  ? "flex-end"
-                  : "flex-start",
+                String(msg.senderId) === String(userId) ? "flex-end" : "flex-start",
               margin: "10px 0",
             }}
           >
@@ -174,14 +169,18 @@ console.log("Typeof senderId =", typeof parsedMessage.sender, "Typeof userId =",
                 padding: "10px",
                 borderRadius: "10px",
                 backgroundColor:
-                  String(msg.senderId) === String(userId) || msg.senderName === username
-                    ? "#daf8cb"
-                    : "#f1f0f0",
+                  String(msg.senderId) === String(userId) ? "#daf8cb" : "#f1f0f0",
                 textAlign: "left",
               }}
             >
               <strong style={{ fontSize: "0.9em", color: "#555" }}>{msg.senderName}</strong>
               <div style={{ marginTop: "5px" }}>{msg.content}</div>
+              <div style={{ fontSize: "0.8em", color: "#888", marginTop: "5px" }}>
+                <span>{new Date(msg.sendAt).toLocaleString()}</span>
+                <span style={{ marginLeft: "10px" }}>
+                  {msg.isRead ? "Read" : "Unread"} ({msg.readByUsersCount} users)
+                </span>
+              </div>
             </div>
           </li>
         ))}
