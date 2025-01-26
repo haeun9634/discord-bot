@@ -1,30 +1,33 @@
 import React, { useEffect, useState } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
+import "./ChatRoomsList.css";
+import ChatRoomManager from "./ChatRoomManager"; // 경로가 잘못되었으면 정확히 수정
 
 const ChatRoomsList = ({ token, onSelectRoom }) => {
   const [chatRooms, setChatRooms] = useState([]);
 
-  useEffect(() => {
-    const fetchChatRooms = async () => {
-      try {
-        const response = await fetch("http://localhost:8080/chat/users/rooms", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!response.ok) {
-          throw new Error("Failed to fetch chat rooms");
-        }
-        const data = await response.json();
-        setChatRooms(data);
-      } catch (error) {
-        console.error("Error fetching chat rooms:", error);
+  // fetchChatRooms 함수 useEffect 외부로 이동
+  const fetchChatRooms = async () => {
+    try {
+      const response = await fetch("http://localhost:8080/chat/users/rooms", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch chat rooms");
       }
-    };
+      const data = await response.json();
+      setChatRooms(data);
+    } catch (error) {
+      console.error("Error fetching chat rooms:", error);
+    }
+  };
 
+  useEffect(() => {
     fetchChatRooms();
 
     const socket = new SockJS("http://localhost:8080/ws/chat");
@@ -72,38 +75,20 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
   }, [token]);
 
   return (
-    <div>
+    <div className="chat-rooms-list">
       <h2>Your Chat Rooms</h2>
-      <ul style={{ listStyleType: "none", padding: 0 }}>
+      <ul>
         {chatRooms.map((room) => (
           <li
             key={room.chatRoom.id}
+            className="chat-room-item"
             onClick={() => onSelectRoom(room.chatRoom.id)}
-            style={{
-              border: "1px solid #ccc",
-              borderRadius: "5px",
-              padding: "10px",
-              margin: "5px 0",
-              cursor: "pointer",
-              background: "#f9f9f9",
-            }}
           >
             <h3>{room.chatRoom.name}</h3>
             <p>Latest Message: {room.latestMessage || "No messages yet"}</p>
-            <div>
-              Participants:
+            <div className="participants">
               {room.userProfiles.map((profile) => (
-                <span
-                  key={profile.id}
-                  style={{
-                    display: "inline-block",
-                    margin: "0 5px",
-                    padding: "5px",
-                    border: "1px solid #ddd",
-                    borderRadius: "50%",
-                    backgroundColor: "#eee",
-                  }}
-                >
+                <span key={profile.id} className="participant-badge">
                   {profile.emoji}
                 </span>
               ))}
@@ -111,6 +96,7 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
           </li>
         ))}
       </ul>
+      <ChatRoomManager token={token} refreshChatRooms={fetchChatRooms} />
     </div>
   );
 };

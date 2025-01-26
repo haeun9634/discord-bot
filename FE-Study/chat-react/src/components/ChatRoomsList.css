@@ -1,0 +1,59 @@
+.chat-rooms-list {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background-color: #f5f5f5;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  
+  .chat-rooms-list h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 15px;
+  }
+  
+  .chat-room-item {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 10px;
+    background: #ffffff;
+    cursor: pointer;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  
+  .chat-room-item:hover {
+    background: #f9f9f9;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .chat-room-item h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.2em;
+    color: #333;
+  }
+  
+  .chat-room-item p {
+    margin: 0;
+    font-size: 0.9em;
+    color: #666;
+  }
+  
+  .chat-room-item .participants {
+    margin-top: 10px;
+  }
+  
+  .participant-badge {
+    display: inline-block;
+    margin-right: 5px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    background-color: #eee;
+    text-align: center;
+    font-size: 0.8em;
+    color: #333;
+  }
+  
