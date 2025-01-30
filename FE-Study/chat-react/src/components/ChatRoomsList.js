@@ -86,6 +86,12 @@ const ChatRoomsList = ({ token, onSelectRoom }) => {
           >
             <h3>{room.chatRoom.name}</h3>
             <p>Latest Message: {room.latestMessage || "No messages yet"}</p>
+            <p>
+              🕒{" "}
+              {room.latestMessageTime
+                ? new Date(room.latestMessageTime).toLocaleString()
+                : "No time available"}
+            </p>
             <div className="participants">
               {room.userProfiles.map((profile) => (
                 <span key={profile.id} className="participant-badge">

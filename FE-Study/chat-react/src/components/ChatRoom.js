@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import "./ChatRoom.css";
 import { Client } from "@stomp/stompjs";
+import { v4 as uuidv4 } from "uuid";
 
 const ChatRoom = ({ token, roomId, userId, username }) => {
   const [message, setMessage] = useState("");
@@ -15,16 +16,50 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
   // useEffect(() => {
   //   if (!stompClient || !isConnected) return;
   
-  //   // 채팅방 입장 시 즉시 읽음 상태 전송
-  //   sendReadStatus(roomId);
-  
-  //   // 예: 5초마다 읽음 상태 업데이트
+  //   //5초마다 읽음상태 업데이트 
   //   const intervalId = setInterval(() => {
   //     sendReadStatus(roomId);
   //   }, 5000);
   
-  //   return () => clearInterval(intervalId);
-  // }, [stompClient, isConnected, roomId]);
+  //   return () => {
+  //     if (stompClient && stompClient.connected) {
+  //       console.log("Disconnecting WebSocket...");
+  //       stompClient.deactivate();
+  //     }
+  //   };
+  // }, [stompClient, isConnected, roomId, token]); // stompClient와 isConnected 추가
+  
+
+  
+  useEffect(() => {
+    if (!isConnected) return; // WebSocket 연결 상태 확인
+  
+    receivedMessages.forEach((msg) => {
+      if (!msg.isRead && String(msg.senderId) !== String(userId)) {
+        sendReadStatus(msg.id); // 읽지 않은 메시지만 상태 전송
+      }
+    });
+  }, [receivedMessages, isConnected]);
+  
+  
+  const sendReadStatus = (messageId) => {
+    if (!stompClient || !isConnected) {
+      console.warn("WebSocket is not connected.");
+      return;
+    }
+  
+    stompClient.publish({
+      destination: `/app/chat/${roomId}/read`,
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        chatRoomId: roomId,
+        messageId: messageId, // 읽은 메시지 ID
+        userId: userId, // 현재 사용자 ID
+      }),
+    });
+  };
+  
+  
   
 
   useEffect(() => {
@@ -59,26 +94,16 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
               return; // 브로드캐스트된 내 메시지는 무시
             }
 
-            setReceivedMessages((prevMessages) => {
-              const uniqueMessages = prevMessages.filter(
-                (msg) => msg.id !== parsedMessage.id // 기존 메시지와 중복 제거
-              );
-              return [...uniqueMessages, parsedMessage];
-            });
+            // 메시지 업데이트
+            updateReceivedMessages(parsedMessage);
             
           });
-
-          // // 여기서 read 상태 변경 이벤트 구독 추가
-          // client.subscribe(`/topic/${roomId}/read`, (message) => {
-          //   const readStatus = JSON.parse(message.body);
-          //   console.log(
-          //     `User ${readStatus.userId} has read messages in room ${readStatus.chatRoomId}`
-          //   );
-          //   updateReadStatusInUI(readStatus); // 업데이트 함수 호출
-          // });
-
-          // // 채팅방 활성화 상태 전송
-          // sendActiveStatus(client, roomId, true);
+          console.log("Subscribing to read events on room:", roomId);
+          client.subscribe(`/topic/${roomId}/read`, (message) => {
+            const readStatus = JSON.parse(message.body);
+            console.log(`User ${readStatus.userId} has read messages in room ${readStatus.chatRoomId}`);
+            updateReadStatusInUI(readStatus);
+          });
         },
         onStompError: (error) => {
           console.error("STOMP error:", error);
@@ -87,13 +112,14 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
           console.warn("WebSocket connection closed.");
           setIsConnected(false);
 
-          // // 채팅방 비활성화 상태 전송
-          // sendActiveStatus(client, roomId, false);
+          // 채팅방 비활성화 상태 전송
+          sendActiveStatus(client, roomId, false);
         },
       });
 
       client.activate();
       setStompClient(client);
+      console.log(client);
     };
 
     connectWebSocket();
@@ -107,10 +133,37 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
     };
   }, [roomId, token]);
 
+  const updateReceivedMessages = (newMessage) => {
+    console.log("Updating messages with:", newMessage);
+    setReceivedMessages((prevMessages) => {
+      console.log("Previous messages:", prevMessages);
+      const isDuplicate = prevMessages.some((msg) => msg.id === newMessage.id);
+      if (isDuplicate) {
+        console.log("Duplicate message detected, skipping:", newMessage);
+        return prevMessages;
+      }
+      const updatedMessages = [...prevMessages, newMessage].sort(
+        (a, b) => new Date(a.sendAt) - new Date(b.sendAt)
+      );
+      console.log("Updated messages:", updatedMessages);
+      return updatedMessages;
+    });
+  };
+  
+  
+  
+
   // 활성화 상태를 서버에 전송하는 함수
+  useEffect(() => {
+    sendActiveStatus(stompClient, roomId, true); // 활성화 상태 전송
+    return () => {
+      sendActiveStatus(stompClient, roomId, false); // 비활성화 상태 전송
+    };
+  }, [stompClient, roomId]);
+  
   const sendActiveStatus = (client, roomId, isActive) => {
     if (!client || !client.connected) return;
-
+  
     client.publish({
       destination: `/app/chat/${roomId}/active`,
       headers: { Authorization: `Bearer ${token}` },
@@ -120,39 +173,27 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
         active: isActive,
       }),
     });
-
-    console.log(`Sent active status: ${isActive ? "active" : "inactive"}`);
   };
-
-  const sendReadStatus = (roomId) => {
-    if (!stompClient || !isConnected) {
-      console.warn("WebSocket is not connected.");
-      return;
-    }
-    console.log("Sending read status for room:", roomId); // 디버깅 로그
-
-    // 서버에 읽음 상태 메시지 전송
-    stompClient.publish({
-      destination: `/app/chat/${roomId}/read`,
-      headers: { Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        chatRoomId: roomId,
-        userId: userId, // 사용자 ID를 포함시켜야 할 수 있음
-      }),
-    });
-  };
+  
 
   const updateReadStatusInUI = (readStatus) => {
-    console.log("Updating read status:", readStatus); // 디버깅 로그
-
     setReceivedMessages((prevMessages) =>
-      prevMessages.map((msg) =>
-        readStatus.chatRoomId === msg.chatRoomId && readStatus.userId === msg.senderId
-          ? { ...msg, isRead: true, readByUsersCount: readStatus.readByUsersCount }
-          : msg
-      )
+      prevMessages.map((msg) => {
+        if (msg.id === readStatus.messageId ) {
+          return {
+            ...msg,
+            isRead: true, // 읽음 처리
+            readByUsersCount: readStatus.readCount, // 읽은 사용자 수 업데이트
+          };
+        }
+        return msg; // 나머지 메시지는 그대로 반환
+      })
     );
   };
+  
+  
+  
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -171,7 +212,7 @@ const ChatRoom = ({ token, roomId, userId, username }) => {
     
   // 메시지 DTO 생성
   const messageDto = {
-    id: `${roomId}-${Date.now()}`,
+    id:  uuidv4(),
     content: customContent || message, // 초대 메시지 또는 일반 메시지 내용
     chatRoomId: roomId,
     senderId: userId,
@@ -302,6 +343,7 @@ const toggleUserList = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [receivedMessages]);
 
+  
 
   return (
     <div>
@@ -345,7 +387,7 @@ const toggleUserList = () => {
       <ul style={{ maxHeight: "300px", overflowY: "auto", padding: 0, listStyle: "none" }}>
         {receivedMessages.map((msg) => (
           <li
-            key={msg.id}
+          key={`${msg.id}`} // key를 고유하게 설정
             style={{
               display: "flex",
               justifyContent: String(msg.senderId) === String(userId) ? "flex-end" : "flex-start",
@@ -366,7 +408,7 @@ const toggleUserList = () => {
               <div style={{ fontSize: "0.8em", color: "#888", marginTop: "5px" }}>
                 <span>{new Date(msg.sendAt).toLocaleString()}</span>
                 <span style={{ marginLeft: "10px" }}>
-                  {msg.isRead ? "Read" : "Unread"} ({msg.readByUsersCount} users)
+                   {msg.isRead ? "Read" : "Unread"}  ({msg.readByUsersCount} users )
                 </span>
               </div>
             </div>
