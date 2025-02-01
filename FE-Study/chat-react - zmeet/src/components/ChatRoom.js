@@ -5,12 +5,10 @@ import { v4 as uuidv4 } from "uuid";
 
 const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
   const [message, setMessage] = useState("");
-  const [receivedMessages, setReceivedMessages] = useState([]); // 기존 및 실시간 메시지 저장
+  const [receivedMessages, setReceivedMessages] = useState([]);
   const [stompClient, setStompClient] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef(null);
-
-  console.log("userId ",userId);
 
   // ✅ 서버에서 기존 메시지 가져오기
   const fetchMessages = async () => {
@@ -24,14 +22,14 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
       });
 
       if (!response.ok) {
-        const errorMessage = await response.text(); // 응답 메시지 확인
+        const errorMessage = await response.text();
         throw new Error("Failed to fetch messages");
       }
 
       const result = await response.json();
       console.log("Fetched messages:", result);
 
-      setReceivedMessages(result.sort((a, b) => new Date(a.sendAt) - new Date(b.sendAt))); // 시간순 정렬
+      setReceivedMessages(result.sort((a, b) => new Date(a.sendAt) - new Date(b.sendAt)));
     } catch (error) {
       console.error("Error fetching messages:", error);
     }
@@ -43,7 +41,7 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
       return;
     }
 
-    fetchMessages(); // ✅ 메시지 조회 API 호출
+    fetchMessages();
 
     let client;
 
@@ -103,7 +101,6 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
       return updatedMessages;
     });
 
-    // ✅ 스크롤을 가장 아래로 이동
     setTimeout(() => {
       if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -112,59 +109,94 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
   };
 
   // ✅ WebSocket 메시지 전송
-  const sendMessage = () => {
+  
+  const sendMessage = (messageType = "TALK") => {
     if (!stompClient || !isConnected) {
       alert("WebSocket is not connected.");
       return;
     }
 
-    if (!message.trim()) {
-      alert("Message is empty.");
-      return;
-    }
-
-    console.log("Sending message - userId:", userId, "username:", username);
-
-    const messageDto = {
+    const chatMessage = {
       id: uuidv4(),
-      content: message,
-      roomId,
+      type: messageType,
+      roomId: roomId.toString(),
       senderId: userId,
       senderName: username,
       sendAt: new Date().toISOString(),
-      messageType: "TALK",
     };
 
-    console.log("Sending message:", messageDto);
+    if (messageType === "TALK") {
+      if (!message.trim()) {
+        alert("Message is empty.");
+        return;
+      }
+      chatMessage.content = message;
+    } else {
+      chatMessage.content = `${username}님이 퇴장하셨습니다.`;
+    }
 
     stompClient.publish({
       destination: `/app/chat/${roomId}`,
-      body: JSON.stringify(messageDto),
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      body: JSON.stringify(chatMessage),
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    setMessage("");
+    if (messageType === "TALK") {
+      setMessage("");
+    }
+  };
+
+  // ✅ 채팅방 나가기 버튼 클릭 시 실행
+  const leaveChatRoom = async () => {
+    try {
+      sendMessage("EXIT"); // `EXIT` 메시지 WebSocket으로 전송
+      await fetch(`http://localhost:8080/chat/rooms/${roomId}/users`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      onLeaveRoom(); // 채팅방 목록으로 이동
+    } catch (error) {
+      console.error("Failed to leave chat room:", error);
+    }
   };
 
   return (
     <div>
       {/* ✅ 뒤로 가기 버튼 */}
-      <button 
-        onClick={onLeaveRoom} 
-        style={{ marginBottom: "10px", padding: "10px", background: "#ff4d4d", color: "#fff", borderRadius: "5px" }}
+      <button
+        onClick={onLeaveRoom}
+        style={{
+          marginBottom: "10px",
+          padding: "10px",
+          background: "#4d79ff",
+          color: "#fff",
+          borderRadius: "5px",
+        }}
       >
-        🔙 Back to Chat Rooms
+        🔙 뒤로 가기
       </button>
 
+      {/* ✅ 채팅방 나가기 버튼 */}
+      <button
+        onClick={leaveChatRoom}
+        style={{
+          marginBottom: "10px",
+          padding: "10px",
+          background: "#ff4d4d",
+          color: "#fff",
+          borderRadius: "5px",
+          marginLeft: "10px",
+        }}
+      >
+        🚪 채팅방 나가기
+      </button>
       <ul style={{ maxHeight: "400px", overflowY: "auto", padding: 0, listStyle: "none" }}>
         {receivedMessages.map((msg) => (
           <li
             key={`${msg.id}`}
             style={{
               display: "flex",
-              justifyContent: String(msg.senderName) === String(userId) ? "flex-end" : "flex-start",
+              justifyContent: String(msg.senderId) === String(userId) ? "flex-end" : "flex-start",
               margin: "10px 0",
               alignItems: "center",
             }}
@@ -190,10 +222,19 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
                 borderRadius: "10px",
                 backgroundColor: String(msg.senderId) === String(userId) ? "#daf8cb" : "#f1f0f0",
                 textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px", // ✅ 메시지와 이모지 간격 조절
               }}
             >
               <strong style={{ fontSize: "0.9em", color: "#555" }}>{msg.senderName}</strong>
               <div style={{ marginTop: "5px" }}>{msg.content}</div>
+
+              {/* ✅ 이모지 표시 (null이 아닐 경우) */}
+              {msg.emoji && (
+                <span style={{ fontSize: "1.5em" }}>{msg.emoji}</span>
+              )}
+
               <div style={{ fontSize: "0.8em", color: "#888", marginTop: "5px" }}>
                 <span>{new Date(msg.sendAt).toLocaleString()}</span>
               </div>
@@ -212,7 +253,7 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
           style={{ width: "80%", padding: "10px", marginRight: "5px", borderRadius: "5px" }}
         />
         <button
-          onClick={() => sendMessage()} // ✅ 명시적으로 호출
+          onClick={() => sendMessage()}
           style={{ padding: "10px", borderRadius: "5px" }}
         >
           Send
