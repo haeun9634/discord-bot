@@ -10,11 +10,14 @@ const App = () => {
   const [username, setUsername] = useState(null);
   const [currentRoomId, setCurrentRoomId] = useState(null);
   const [receivedMessages, setReceivedMessages] = useState([]);
+  const [studentNumber, setStudentNumber] = useState(null);
 
-  const handleLogin = (token) => {
-    console.log("App: Received login data:", { token });
+  const handleLogin = (token, studentNumber) => {
+    console.log("App: Received login data:", { token, studentNumber });
     setToken(token);
+    setStudentNumber(studentNumber); // ✅ studentNumber 저장
   };
+  
 
   if (!token) {
     return <Login onLogin={handleLogin} />;
@@ -47,7 +50,9 @@ const App = () => {
           </button>
         </div>
       ) : (
-        <ChatRoomsList token={token} onSelectRoom={setCurrentRoomId} />
+        <ChatRoomsList token={token}
+         onSelectRoom={setCurrentRoomId} 
+         studentNumber={studentNumber}/>
       )}
     </div>
   );

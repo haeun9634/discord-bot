@@ -4,12 +4,13 @@ import { Client } from "@stomp/stompjs";
 import "./ChatRoomsList.css";
 import ChatRoom from "./ChatRoom"; // ChatRoom 직접 불러오기
 
-const ChatRoomsList = ({ token, userId, username }) => {
-  const [chatRooms, setChatRooms] = useState([]);
+const ChatRoomsList = ({ token, studentNumber, userId, username }) => {
+  const [chatRooms, setChatRooms] = useState([]); // 채팅방 목록
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [stompClient, setStompClient] = useState(null);
+  const [receivedMessages, setReceivedMessages] = useState([]);
 
-  // ✅ 채팅방 목록 불러오기 (초기 1회 실행)
+  // ✅ 1️⃣ 채팅방 목록 불러오기 (API 호출)
   const fetchChatRooms = async () => {
     try {
       const response = await fetch("http://localhost:8080/chat/rooms/users", {
@@ -28,11 +29,11 @@ const ChatRoomsList = ({ token, userId, username }) => {
       console.log("Fetched chat rooms:", result);
 
       if (Array.isArray(result.data)) {
-        // ✅ 최신 메시지 시간을 기준으로 정렬 (slice 사용하여 상태 변경 감지)
+        // 최신 메시지 기준으로 정렬
         const sortedRooms = result.data
           .slice()
           .sort((a, b) => new Date(b.latestMessageTime || b.lastestTime || 0) - new Date(a.latestMessageTime || a.lastestTime || 0));
-        
+
         setChatRooms(sortedRooms);
       } else {
         console.error("Unexpected response format:", result);
@@ -45,9 +46,13 @@ const ChatRoomsList = ({ token, userId, username }) => {
   };
 
   useEffect(() => {
-    fetchChatRooms(); // 초기 데이터 로드
+    fetchChatRooms(); // ✅ 최초 API 호출 (채팅방 목록 가져오기)
+  }, [token]);
 
-    // ✅ WebSocket 연결 설정
+  useEffect(() => {
+    if (chatRooms.length === 0) return; // ✅ 채팅방 목록이 없으면 WebSocket 구독하지 않음.
+
+    // ✅ 2️⃣ WebSocket 연결 설정
     const socket = new SockJS("http://localhost:8080/ws/chat");
     const client = new Client({
       webSocketFactory: () => socket,
@@ -55,27 +60,43 @@ const ChatRoomsList = ({ token, userId, username }) => {
       onConnect: () => {
         console.log("Connected to WebSocket");
 
-        // ✅ 채팅방 목록을 구독
-        client.subscribe("/topic/chatrooms", (message) => {
-          const updatedChatRoom = JSON.parse(message.body);
-          console.log("Received chat room update:", updatedChatRoom);
+        // ✅ 모든 채팅방 구독 (이제 하나의 채널에서 모든 정보 처리)
+chatRooms.forEach((room) => {
+  client.subscribe(`/topic/${room.chatRoomId}`, (message) => {
+    const updatedMessage = JSON.parse(message.body);
+    console.log("🔔 새 메시지 수신:", updatedMessage);
 
-          setChatRooms((prevRooms) => {
-            // 최신 메시지 시간 필드 확인 (lastestTime → latestMessageTime)
-            const latestTime = new Date(updatedChatRoom.latestMessageTime || updatedChatRoom.lastestTime || 0);
+    // ✅ 1️⃣ 채팅방 내부 메시지 추가 (채팅 화면 업데이트)
+    if (updatedMessage.type === "TALK" || updatedMessage.type === "EXIT") {
+      setReceivedMessages((prevMessages) => [...prevMessages, updatedMessage]);
+    }
+    // ✅ 2️⃣ 채팅방 목록 업데이트 (EXIT, TALK 모두 적용)
+    setChatRooms((prevRooms) => {
+      // 퇴장(`EXIT`)한 사용자가 현재 사용자라면 목록에서 제거
+      if (updatedMessage.type === "EXIT" && updatedMessage.senderName === username) {
+        return prevRooms.filter((room) => room.chatRoomId !== updatedMessage.roomId);
+      }
 
-            // 기존 채팅방에서 해당 채팅방 제거
-            const filteredRooms = prevRooms.filter(room => room.chatRoomId !== updatedChatRoom.chatRoomId);
-            
-            // 최신 채팅방을 맨 위에 추가
-            const newRooms = [updatedChatRoom, ...filteredRooms];
+      // 채팅방 찾기
+      const existingRoom = prevRooms.find((r) => r.chatRoomId === updatedMessage.roomId);
 
-            // 최신 메시지 시간을 기준으로 정렬 (slice 사용하여 상태 변경 감지)
-            return newRooms
-              .slice()
-              .sort((a, b) => new Date(b.latestMessageTime || b.lastestTime || 0) - new Date(a.latestMessageTime || a.lastestTime || 0));
-          });
-        });
+      // 기존 데이터 유지하면서 최신 정보 업데이트
+      const mergedRoom = {
+        ...existingRoom,
+        latestMessage: updatedMessage.content, // 최신 메시지 업데이트
+        lastestTime: updatedMessage.sendAt, // 최신 시간 업데이트
+        latestMessageType: updatedMessage.type, // 메시지 타입 저장
+      };
+
+      // 기존 목록에서 해당 채팅방 제거 후 다시 추가 (정렬 유지)
+      const filteredRooms = prevRooms.filter((r) => r.chatRoomId !== updatedMessage.roomId);
+      return [mergedRoom, ...filteredRooms].sort(
+        (a, b) => new Date(b.lastestTime) - new Date(a.lastestTime)
+      );
+    });
+  });
+});
+
 
         setStompClient(client);
       },
@@ -87,9 +108,9 @@ const ChatRoomsList = ({ token, userId, username }) => {
     client.activate();
 
     return () => {
-      client.deactivate(); // 컴포넌트 언마운트 시 연결 해제
+      client.deactivate(); // ✅ 컴포넌트 언마운트 시 WebSocket 연결 해제
     };
-  }, [token]);
+  }, [token, chatRooms]); // ✅ chatRooms가 변경될 때마다 다시 구독
 
   return (
     <div className="chat-rooms-list">
@@ -124,12 +145,12 @@ const ChatRoomsList = ({ token, userId, username }) => {
           </ul>
         </>
       ) : (
-        <ChatRoom 
-          token={token} 
-          roomId={selectedRoomId} 
-          userId={userId} 
-          username={username} 
-          onLeaveRoom={() => setSelectedRoomId(null)} // ✅ 뒤로 가기 버튼 핸들러 전달
+        <ChatRoom
+          token={token}
+          roomId={selectedRoomId}
+          userId={userId}
+          username={username}
+          onLeaveRoom={() => setSelectedRoomId(null)}
         />
       )}
     </div>

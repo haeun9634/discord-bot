@@ -11,7 +11,7 @@ const Login = ({ onLogin }) => {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:8080/jwt/login", {
+      const response = await fetch("http://localhost:8080/user/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -28,7 +28,7 @@ const Login = ({ onLogin }) => {
       console.log("Login successful:", data);
 
       // 부모 컴포넌트로 데이터 전달
-      onLogin(data.data.refreshToken);
+      onLogin(data.data.refreshToken, studentNumber);
 
       setstudentNumber("");
       setPassword("");

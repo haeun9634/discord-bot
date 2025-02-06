@@ -10,6 +10,7 @@
     "react-router-dom": "^7.1.4",
     "react-scripts": "5.0.1",
     "sockjs-client": "^1.5.1",
+    "styled-components": "^6.1.14",
     "uuid": "^11.0.5",
     "web-vitals": "^4.2.4"
   },

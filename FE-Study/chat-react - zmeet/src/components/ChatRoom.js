@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import { v4 as uuidv4 } from "uuid";
+import * as S from "./Styles";
 
 const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
   const [message, setMessage] = useState("");
@@ -59,7 +60,7 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
           console.log("WebSocket connected.");
           setIsConnected(true);
 
-          // ✅ 실시간 메시지 수신
+          // 실시간 메시지 수신
           client.subscribe(`/topic/${roomId}`, (messageOutput) => {
             const parsedMessage = JSON.parse(messageOutput.body);
             console.log("Received real-time message:", parsedMessage);
@@ -108,23 +109,26 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
     }, 100);
   };
 
-  // ✅ WebSocket 메시지 전송
+  // ✅ WebSocket 메시지 전송z
   
-  const sendMessage = (messageType = "TALK") => {
+  const sendMessage = (event = null, messageType = "TALK") => {
+      console.log(`sendMessage 실행됨: messageType=${messageType}`);
+    // 이벤트 객체가 전달되었을 경우, Enter 키만 허용
+    if (event && event.key !== "Enter") {
+      return;
+    }
+  
     if (!stompClient || !isConnected) {
       alert("WebSocket is not connected.");
       return;
     }
-
+  
     const chatMessage = {
       id: uuidv4(),
       type: messageType,
-      roomId: roomId.toString(),
-      senderId: userId,
-      senderName: username,
-      sendAt: new Date().toISOString(),
+      roomId: roomId.toString()
     };
-
+  
     if (messageType === "TALK") {
       if (!message.trim()) {
         alert("Message is empty.");
@@ -134,22 +138,24 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
     } else {
       chatMessage.content = `${username}님이 퇴장하셨습니다.`;
     }
-
+  
     stompClient.publish({
       destination: `/app/chat/${roomId}`,
       body: JSON.stringify(chatMessage),
       headers: { Authorization: `Bearer ${token}` },
     });
-
+  
     if (messageType === "TALK") {
       setMessage("");
     }
   };
+  
 
   // ✅ 채팅방 나가기 버튼 클릭 시 실행
   const leaveChatRoom = async () => {
+    console.log(`http://localhost:8080/chat/rooms/${roomId}/users`);
     try {
-      sendMessage("EXIT"); // `EXIT` 메시지 WebSocket으로 전송
+      sendMessage(null, "EXIT"); // `EXIT` 메시지 WebSocket으로 전송
       await fetch(`http://localhost:8080/chat/rooms/${roomId}/users`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -160,106 +166,33 @@ const ChatRoom = ({ token, roomId, userId, username, onLeaveRoom }) => {
     }
   };
 
+  
+
   return (
-    <div>
-      {/* ✅ 뒤로 가기 버튼 */}
-      <button
-        onClick={onLeaveRoom}
-        style={{
-          marginBottom: "10px",
-          padding: "10px",
-          background: "#4d79ff",
-          color: "#fff",
-          borderRadius: "5px",
-        }}
-      >
-        🔙 뒤로 가기
-      </button>
+    <S.ChatContainer>
+      <S.Button onClick={onLeaveRoom}>🔙 뒤로 가기</S.Button>
+      <S.Button variant="leave" onClick={() => leaveChatRoom()}>🚪 채팅방 나가기</S.Button>
 
-      {/* ✅ 채팅방 나가기 버튼 */}
-      <button
-        onClick={leaveChatRoom}
-        style={{
-          marginBottom: "10px",
-          padding: "10px",
-          background: "#ff4d4d",
-          color: "#fff",
-          borderRadius: "5px",
-          marginLeft: "10px",
-        }}
-      >
-        🚪 채팅방 나가기
-      </button>
-      <ul style={{ maxHeight: "400px", overflowY: "auto", padding: 0, listStyle: "none" }}>
+      <S.MessageList>
         {receivedMessages.map((msg) => (
-          <li
-            key={`${msg.id}`}
-            style={{
-              display: "flex",
-              justifyContent: String(msg.senderId) === String(userId) ? "flex-end" : "flex-start",
-              margin: "10px 0",
-              alignItems: "center",
-            }}
-          >
-            {/* ✅ 아이콘 (프로필 이미지 등) */}
-            {msg.senderIcon && (
-              <img
-                src={msg.senderIcon}
-                alt="Sender Icon"
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  margin: String(msg.senderId) === String(userId) ? "0 10px 0 0" : "0 0 0 10px",
-                }}
-              />
-            )}
-
-            <div
-              style={{
-                maxWidth: "60%",
-                padding: "10px",
-                borderRadius: "10px",
-                backgroundColor: String(msg.senderId) === String(userId) ? "#daf8cb" : "#f1f0f0",
-                textAlign: "left",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px", // ✅ 메시지와 이모지 간격 조절
-              }}
-            >
-              <strong style={{ fontSize: "0.9em", color: "#555" }}>{msg.senderName}</strong>
-              <div style={{ marginTop: "5px" }}>{msg.content}</div>
-
-              {/* ✅ 이모지 표시 (null이 아닐 경우) */}
-              {msg.emoji && (
-                <span style={{ fontSize: "1.5em" }}>{msg.emoji}</span>
-              )}
-
-              <div style={{ fontSize: "0.8em", color: "#888", marginTop: "5px" }}>
-                <span>{new Date(msg.sendAt).toLocaleString()}</span>
-              </div>
-            </div>
-          </li>
+          <S.MessageItem key={msg.id} isMine={String(msg.senderName) === String(username)}>
+            {msg.senderIcon && <S.ProfileImage src={msg.senderIcon} alt="Sender Icon" isMine={String(msg.senderName) === String(username)} />}
+            <S.MessageBubble isMine={String(msg.senderName) === String(username)}>
+              <S.SenderName>{msg.senderName}</S.SenderName>
+              <S.MessageContent>{msg.content}</S.MessageContent>
+              {msg.emoji && <S.Emoji>{msg.emoji}</S.Emoji>}
+              <S.MessageTime>{new Date(msg.sendAt).toLocaleString()}</S.MessageTime>
+            </S.MessageBubble>
+          </S.MessageItem>
         ))}
-        {/* ✅ 스크롤 자동 이동을 위한 빈 div */}
         <div ref={messagesEndRef} />
-      </ul>
+      </S.MessageList>
 
-      <div>
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          style={{ width: "80%", padding: "10px", marginRight: "5px", borderRadius: "5px" }}
-        />
-        <button
-          onClick={() => sendMessage()}
-          style={{ padding: "10px", borderRadius: "5px" }}
-        >
-          Send
-        </button>
-      </div>
-    </div>
+      <S.InputContainer>
+        <S.MessageInput type="text" value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => sendMessage(e)} />
+        <S.SendButton onClick={() => sendMessage()}>Send</S.SendButton>
+      </S.InputContainer>
+    </S.ChatContainer>
   );
 };
 
