@@ -11,10 +11,9 @@ const client = new Client({
 });
 
 client.once(Events.ClientReady, () => {
-    console.log(`✅ 디스코드 봇이 로그인되었습니다: ${client.user.tag}`);
+    
 });
 
-// ✅ Interaction 처리
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isButton()) return;
 
@@ -26,38 +25,48 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     try {
-        // ✅ Interaction 만료 방지를 위해 즉시 응답 (3초 제한 방지)
+        // Interaction 만료 방지를 위해 즉시 응답 (3초 제한 방지)
         await interaction.deferReply({ ephemeral: true });
 
-        // ✅ Spring Boot API 호출
+        // 인증 요청 메시지에서 이미지 URL 가져오기
+        const message = interaction.message;
+        const imgUrl = message.embeds.length > 0 ? message.embeds[0].image?.url : null;
+        
+        // Spring Boot API 호출 
         const response = await axios.patch(`${process.env.SPRING_SERVER_URL}/api/auth/user/verify`, null, {
             params: {
-                userId: userId,
+                userId: userId, 
                 approved: action === 'approve'
+            },
+            headers: { 
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             }
         });
+        
+        
 
         console.log(`✅ Spring Boot 응답: ${JSON.stringify(response.data)}`);
 
-        // ✅ Interaction이 만료되지 않았다면 editReply() 실행
+        // Interaction이 만료되지 않았다면 editReply() 실행
         try {
-            await interaction.editReply({ content: `✅ 처리 완료: ${action === 'approve' ? '승인 ✅' : '거절 ❌'}` });
+            await interaction.editReply({ content: ` 처리 완료: ${action === 'approve' ? '승인 ✅' : '거절 ❌'}` });
         } catch (editError) {
-            console.error("🚨 editReply() 응답 실패:", editError);
+            console.error("editReply() 응답 실패:", editError);
             if (editError.code === 'InteractionNotReplied') {
                 await interaction.followUp({ content: "❌ 응답 시간이 초과되었습니다. 다시 시도해주세요.", ephemeral: true });
             }
         }
 
     } catch (error) {
-        console.error("🚨 Spring Boot API 호출 실패:", error);
+        console.error("Spring Boot API 호출 실패:", error);
 
         if (error.response && error.response.status === 404) {
-            console.warn("⚠ Unknown interaction - 응답이 만료됨. followUp()으로 처리");
+            console.warn("Unknown interaction - 응답이 만료됨. followUp()으로 처리");
             try {
-                await interaction.followUp({ content: "❌ 응답 시간이 초과되었습니다. 다시 시도해주세요.", ephemeral: true });
+                await interaction.followUp({ content: "응답 시간이 초과되었습니다. 다시 시도해주세요.", ephemeral: true });
             } catch (followUpError) {
-                console.error("🚨 followUp() 응답 실패:", followUpError);
+                console.error("followUp() 응답 실패:", followUpError);
             }
             return;
         }
@@ -70,19 +79,20 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
-// ✅ 인증 요청 메시지 전송 함수
+
+// 인증 요청 메시지 전송 함수
 async function sendAuthRequest(user, requestDTO) {
     try {
         const channel = await client.channels.fetch(process.env.DISCORD_CHANNEL_ID);
 
-        // ✅ Embed 메시지 생성
+        // Embed 메시지 생성
         const embed = new EmbedBuilder()
             .setTitle("📢 인증 요청")
             .setDescription(requestDTO.content)
             .setImage(requestDTO.imgUrl)
             .setColor(0x00FF00);
 
-        // ✅ 버튼 추가
+        // 버튼 추가
         const buttons = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
@@ -95,21 +105,21 @@ async function sendAuthRequest(user, requestDTO) {
                     .setStyle(ButtonStyle.Danger)
             );
 
-        // ✅ 디스코드 채널에 메시지 전송
+        // 디스코드 채널에 메시지 전송
         await channel.send({
             content: `**${user.name} 께서 인증을 요청하셨어요!**`,
             embeds: [embed],
             components: [buttons]
         });
 
-        console.log("✅ 인증 요청 메시지 전송 성공");
+        console.log("인증 요청 메시지 전송 성공");
     } catch (error) {
-        console.error("🚨 인증 요청 메시지 전송 실패:", error);
+        console.error("인증 요청 메시지 전송 실패:", error);
     }
 }
 
-// ✅ 디스코드 봇 로그인
+// 디스코드 봇 로그인
 client.login(process.env.DISCORD_TOKEN);
 
-// ✅ Spring Boot에서 메시지 요청을 받을 때 실행
+// Spring Boot에서 메시지 요청을 받을 때 실행
 module.exports = { sendAuthRequest };
