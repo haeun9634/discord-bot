@@ -13,7 +13,7 @@ const ChatRoomsList = ({ token, studentNumber, userId, username }) => {
   // ✅ 1️⃣ 채팅방 목록 불러오기 (API 호출)
   const fetchChatRooms = async () => {
     try {
-      const response = await fetch("http://localhost:8080/chat/rooms/users", {
+      const response = await fetch("http://localhost:8080/api/chat/rooms/users", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -53,7 +53,7 @@ const ChatRoomsList = ({ token, studentNumber, userId, username }) => {
     if (chatRooms.length === 0) return; // ✅ 채팅방 목록이 없으면 WebSocket 구독하지 않음.
 
     // ✅ 2️⃣ WebSocket 연결 설정
-    const socket = new SockJS("http://localhost:8080/ws/chat");
+    const socket = new SockJS("http://localhost:8080/ws");
     const client = new Client({
       webSocketFactory: () => socket,
       connectHeaders: { Authorization: `Bearer ${token}` },
